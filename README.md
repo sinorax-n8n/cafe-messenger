@@ -4,10 +4,13 @@
 
 ## 기술 스택
 
+[![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-blueviolet?logo=anthropic)](https://claude.ai/code)
+
 - **Electron** - 데스크톱 애플리케이션 프레임워크
 - **Vite + TailwindCSS** - 번들링 및 스타일링
 - **SQLite** - 로컬 데이터 저장
 - **Docker** - 개발 및 빌드 환경
+- **Claude Code** - AI 페어 프로그래밍
 
 ## 주요 기능
 
