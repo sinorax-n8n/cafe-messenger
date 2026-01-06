@@ -1,0 +1,5 @@
+artifacts/*
+
+# 환경 변수 파일 (Webhook URL 등 민감 정보 포함)
+.claude/hooks/.env
+.claude/hooks/TEST.md

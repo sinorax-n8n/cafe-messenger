@@ -1,0 +1,36 @@
+services:
+  desktop-dev:
+    build:
+      context: .
+      dockerfile: apps/desktop/Dockerfile.dev
+    working_dir: /work/apps/desktop
+    volumes:
+      # 소스 마운트
+      - ./:/work
+
+      # node_modules는 컨테이너 볼륨에 유지(로컬 오염 방지)
+      - desktop_node_modules:/work/apps/desktop/node_modules
+
+      # 산출물 받는 폴더
+      - ./artifacts:/work/artifacts
+    environment:
+      # Windows/WSL에서 파일 변경 감지 안정화
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - CERTIFICATE_PASSWORD=testpassword
+    command: >
+      bash -lc "npm install && npm run make:win"
+
+  # 빌드 전용(번들 결과만 artifacts로)
+  desktop-build:
+    build:
+      context: .
+      dockerfile: apps/desktop/Dockerfile.dev
+    working_dir: /work/apps/desktop
+    volumes:
+      - ./:/work
+      - desktop_node_modules:/work/apps/desktop/node_modules
+      - ./artifacts:/work/artifacts
+
+volumes:
+  desktop_node_modules:

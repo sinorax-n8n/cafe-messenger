@@ -1,0 +1,34 @@
+FROM node:24.11.1-bookworm-slim
+
+# npm을 최신으로 업데이트
+RUN npm i -g npm@latest
+
+# better-sqlite3 빌드를 위한 Python 및 빌드 도구 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    zip unzip \
+    python3 \
+    python3-pip \
+    build-essential \
+    git \
+    ca-certificates \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# CA 인증서 업데이트
+RUN update-ca-certificates
+
+# Python 심볼릭 링크 생성 (node-gyp가 python 명령을 찾을 수 있도록)
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# 작업 디렉토리 설정
+WORKDIR /work/apps/desktop
+
+# npm 설정
+RUN npm config set strict-ssl false && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retries 5
+
+# Node.js 환경 변수 설정
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0 \
+    NODE_OPTIONS="--use-openssl-ca"

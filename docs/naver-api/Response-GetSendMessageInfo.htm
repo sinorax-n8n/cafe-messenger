@@ -1,0 +1,214 @@
+HTTP/1.1 200 OK
+date: Mon, 22 Dec 2025 23:57:50 GMT
+cache-control: no-cache, no-store, max-age=0, must-revalidate
+pragma: no-cache
+expires: Thu, 01 Jan 1970 00:00:00 GMT
+content-language: ko
+vary: Accept-Encoding
+content-length: 8663
+content-type: text/html;charset=UTF-8
+referrer-policy: unsafe-url
+server: nfront
+
+
+
+
+
+
+
+<!DOCTYPE HTML>
+<html lang="ko">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>쪽지 쓰기 - 팝업</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="referrer" content="always">
+<link rel="stylesheet" type="text/css" href="/css/note_main.140206.css">
+
+
+
+	<script src="/uglified_jindo_25052901.js" charset="utf-8"></script>
+
+
+</head>
+<body>
+<!-- [D]쪽지쓰기 팝업 390px 윈도우의 크기를 390으로 띄워주세요. -->
+<div id="pop_wrap" class="pop_write">
+	<div class="pop_header">
+		<h1>쪽지 쓰기 </h1>
+	</div>
+	<div class="pop_content">
+		<div class="note_write">			
+			<div class="send_window">
+				<div class="toady_sent">
+					<span class="default">오늘보낸쪽지  <span class="sent_note" id="sentNoteCount">0</span> / <strong id="sendLimit">50</strong> <span class="desc">( 내게 쓴 쪽지 제외 )</span></span>
+				</div>
+				<div id="replyMode" style="display:none">
+					<span class="tf_tit">
+						<span class="recipient">받는사람</span>
+					</span>
+						<span class="tf_cont">
+						<span id="reply_id"></span>
+					</span>
+				</div>
+				<div id="normalMode">
+				<span class="tf_tit">
+					<a class="recipient" id="recipient" style="display:none;">받는사람</a>
+					<label for="who" class="recipient">받는사람</label>
+					<input type="checkbox" id="chk_tome" onclick="nWrite.toggleToMe();ccr(this,'wrm.tome',event)">
+					<label for="chk_tome">내게쓰기</label>
+				</span>
+				<span class="tf_cont">	
+					<a href="#" id="targetName" style="display:none"></a>							
+					<a id="addressButton" href="#" class="button_s _click(nWrite|openAddressPopup) _ccr(wrm.contact) _stopDefault">주소록</a>
+					<span class="tx">
+						<input type="text" id="who" onKeyup="nWrite.checkTargetId(event)" onfocus="nWrite.clearInitMessageFocus();" onblur="nWrite.clearInitMessageBlur();" value="" style="ime-mode: disabled;">
+						<input type="hidden" id="who_memberKey" value="">
+					</span>
+				</span>
+				</div>
+				<div class="writing_area">
+					<textarea id="writeNote" style="resize:none;" onkeyup="nWrite.checkContentLength();" rows="5" cols="55" title="쪽지 내용을 입력해 주세요."></textarea>
+				</div>
+				<div class="writing_option">
+					<div class="character">
+						<span id="noteLen">0</span> / <span id="noteMaxLen">1,000</span>자
+					</div>					
+					<div id="comment1" class="save">
+						<input type="checkbox" id="savenote" onclick="ccr(this,'wrm.writesave',event)">
+						<label for="savenote">보낸쪽지함에 저장</label> 
+						<p class="txt_under">(보낸쪽지함에 저장하면 수신확인/발송취소가 가능합니다.)</p>
+					</div>
+					<!-- [D] 내게쓰기 체크시 display:block -->
+					<p id="comment2" style="display:none">
+						내게 쓴 쪽지는 <strong>내게쓴쪽지함</strong>에만 저장되며,<br>
+						삭제하시지 않으시면 영구 보관됩니다.
+					</p>
+				</div>
+			</div>
+			<div class="btns">				
+				<a href="#" class="button b  _click(nWrite|clickSendMemo) _ccr(wrm.send) _stopDefault">보내기</a>
+				<a href="#" class="button" onclick="window.close();ccr(this,'wrm.cancel',event);return false;">취소</a>
+			</div>
+			<!-- 메일로 보내기 폼 -->
+			<form id="mail_form" name="fm" method="POST" action=''>
+				<input type=hidden name="cmd"  value=""> 
+				<input type=hidden name="srvid"   value="">
+				<input type=hidden name="to" value="">
+				<input type=hidden name="body"  value="">     
+			</form>				
+			<!-- //메일로 보내기 폼 -->
+		</div>
+	</div>
+</div>
+<div id="dimmed_layer" class="ly_dimmed" style="display:none"> 
+<!--[if IE]><iframe title="빈 아이프레임" class="ieFix" frameborder="0"></iframe><![endif]-->	
+</div>
+<!-- 캡챠 영역 -->
+<div id="note_captcha" class="dh_layer" style="display:none;top:10px;left:10px;">
+	<div class="note_captcha">
+		<h4 class="note_captcha_tit">스팸쪽지 방지 확인</h4>
+		<p class="note_captcha_sub">프로그램을 이용한 자동 발송을 방지하기 위해서 보안절차를 거치고 있습니다.</p>
+		<div class="note_captcha_cont">
+			<div class="note_captcha_img">
+				<img src="" width="198" height="123" alt="">
+			</div>
+			<a href="#" class="note_captcha_reload _click(nWrite|doCaptCha) _stopDefault">이미지 새로고침</a>
+			<!-- <p>[D] <p style="display:none"> <strong>입력된 문자가 올바르지 않습니다. 다시 입력해 주세요.</strong></p>-->
+			<p id="desc_captcha"></p>
+			<p>이미지를 보이는 대로 입력해주세요.</p>
+			<input type="text" id="inputCaptcha" name="" value="" class="input_txt" title="캡챠입력">
+		</div>
+		<div class="buttonSet">
+			<a href="#" class="button b _click(nWrite|confirmCaptcha) _ccr(wrm.sendcaptcha) _stopDefault"><span class="ico_send"></span>보내기</a>
+			<a href="#" class="button _click(nWrite|cancelCaptcha) _ccr(wrm.cancelcaptcha) _stopDefault">취소</a>
+		</div>
+	</div>
+</div>					
+<!-- //캡챠 영역 -->
+<!-- 이용제한 알림 -->
+<div id="limit_send_layer" class="dh_layer" style="display:none">
+	<div class="type_c">		
+		<h4 class="htitle">이용제한 알림
+			<a href="#" title="닫기" class="btn_close" onclick="$Element('limit_send_layer').hide();$Element('dimmed_layer').hide();return false"><span class="blind">이용제한 알림 레이어 닫기</span></a>
+		</h4>				
+		<p class="desc">
+			이용제한 기간 중에는 동시에 <span id="multicast_limit1">2</span>명 이상에게 쪽지를 보낼 수 없습니다.
+		</p>
+		<dl class="notify_limit">
+		<dt>이용 제한 사유</dt>
+		<dd>홍보성 쪽지 발송</dd>
+		<dt>이용 제한 기간</dt>
+		<dd id="limit_period">2012.07.23 ~ 2013.07.23</dd>
+		<dt>발송 제한 내용</dt>
+		<dd id="limit_desc2">
+			<p><span id="multicast_limit2">2</span>명이상 동시 수신 쪽지 제한</p>
+			<p>1일 <span id="today_limit">21</span>명 이상에게 쪽지 발송 제한</p></dd>
+		</dl>
+		
+		<div class="btns">
+			<a href="#" class="button b" onclick="$Element('limit_send_layer').hide();$Element('dimmed_layer').hide();return false">닫기</a>
+		</div>		
+	</div>		
+</div>
+<!-- //이용제한 알림 -->	
+<!-- 로그인 레이어-->
+<div id="loginmid_layer" class="dh_layer" style="display:none;">
+	<div class="type_c login">
+		<div class="htitle">
+			비밀번호 확인
+			<a href="#" title="닫기" class="btn_close" onclick="nCore.hideLoginLayer();return false"><span class="blind">이용제한 알림 레이어 닫기</span></a>
+		</div>
+		<div class="description">
+			<p class="display:block">IP가 자주 변경되는 네트워크 환경에서 로그인하는 경우<br><strong>IP보안을 해제</strong> 후 이용하시기 바랍니다.</p>
+			<p>다시 한번 <strong>비밀번호 확인</strong> 하시면 이용중인 화면으로 돌아가며,<br>작성 중이던 내용을 정상적으로 전송 또는 등록하실 수 있습니다.</p>
+		</div>
+		<div class="login_frame">			
+			<!-- 로그인아이프레임 영역 입니다. -->
+			<iframe id="loginframe" scrolling="no" frameborder="0" title="빈프레임" name="" src="">				
+			</iframe>
+			<!-- //로그인아이프레임 영역 입니다. -->
+		</div>
+		<div class="btns">
+			<a href="#" class="button" onclick="nCore.hideLoginLayer();return false">확인</a>
+		</div>
+	</div>
+</div>
+<!-- //로그인 레이어-->
+<!-- 코리안클릭 pv 호출 -->
+<div id="kcpv" style="width:0px;height:0px;"></div>
+<!-- //코리안클릭 pv 호출 -->
+
+
+
+
+	<script src="/uglified_common_25052901.js" charset="utf-8"></script>
+	<script src="/uglified_write_25052901.js" charset="utf-8"></script>
+
+
+
+<script type="text/javascript">
+var oNote = $Json({"toMe":0,"targetUserId":"","todaySentCount":2,"maskedTargetUserId":"qkrt********","userId":"reg2477","targetNickname":{"cgRAZcXHw9OWy2Sz79EVCr0rBe-Zhs1h7-TLjrxRIKk":"최선을 다하는 삶","reg2477":"김동현"},"token":"MTc2NjQ0Nzg3MDI2OXJlZzI0Nzc=","targetCafeMemberKey":"cgRAZcXHw9OWy2Sz79EVCr0rBe-Zhs1h7-TLjrxRIKk","blockinfo":{"sendLimitReason":"","multicastLimit":10,"endDate":"","startDate":""},"noteLength":1000,"sendLimit":50,"svcCode":3775659410,"svcType":2,"userType":"normal"}).toObject();
+//var sWriteType = (oNote.tome == "1") ? "toMe" : (oNote.targetUserId) ? "reply" : "new";
+var sWriteType = "";
+if (oNote.tome == "1"){
+	sWriteType = "toMe";
+} else {
+	if ((oNote.targetUserId || oNote.targetCafeMemberKey) && oNote.svcType != "18") {
+		sWriteType = "reply";
+	} else {
+		sWriteType = "new";
+	}
+}
+
+n = {};
+n.info = {};
+n.info.env = {};
+nEnv = n.info.env;
+nEnv.popup = true;
+nEvent.addEventHandler(document, "click");
+
+nWrite.initWrite(sWriteType, oNote);
+</script>
+</body>
+</html>
