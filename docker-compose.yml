@@ -20,17 +20,5 @@ services:
       - CERTIFICATE_PASSWORD=testpassword
     command: >
       bash -lc "npm install && npm run make:win"
-
-  # 빌드 전용(번들 결과만 artifacts로)
-  desktop-build:
-    build:
-      context: .
-      dockerfile: apps/desktop/Dockerfile.dev
-    working_dir: /work/apps/desktop
-    volumes:
-      - ./:/work
-      - desktop_node_modules:/work/apps/desktop/node_modules
-      - ./artifacts:/work/artifacts
-
 volumes:
   desktop_node_modules:
