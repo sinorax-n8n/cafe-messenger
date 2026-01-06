@@ -37,13 +37,13 @@
 
 ```bash
 # 저장소 클론
-git clone <repository-url>
+git clone https://github.com/sinorax-n8n/cafe-messenger.git
 cd cafe-messenger
 
 # 핫 리로드가 포함된 개발 서버 시작
 docker-compose up desktop-dev
 
-빌드 결과물은 `artifacts/make/` 디렉토리에 생성됩니다.
+빌드 결과물은 `artifacts/make/zip/win32/x64/make/` 디렉토리에 zip 파일로 생성됩니다.
 ```
 
 ## 사용법
