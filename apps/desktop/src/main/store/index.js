@@ -152,7 +152,94 @@ class DataStore {
     // accounts 테이블에 sent_count_date 컬럼 추가 (없는 경우)
     this.addColumnIfNotExists('accounts', 'sent_count_date', 'TEXT')
 
+    // accounts 테이블 컬럼명 변경 마이그레이션 (naver_id → account_id 등)
+    this.migrateAccountsTableColumns()
+
+    // cafes 테이블에 cafe_type 컬럼 추가 마이그레이션
+    this.migrateCafesTableColumns()
+
     console.log('[Store] Migrations completed')
+  }
+
+  /**
+   * accounts 테이블 컬럼명 변경 마이그레이션
+   * - naver_id → account_id
+   * - naver_password → account_password
+   * - account_type 컬럼 추가 (기본값 'naver')
+   */
+  migrateAccountsTableColumns() {
+    try {
+      const tableInfo = this.db.prepare('PRAGMA table_info(accounts)').all()
+      const columns = tableInfo.map(col => col.name)
+
+      // naver_id 컬럼이 있으면 마이그레이션 필요
+      if (columns.includes('naver_id')) {
+        console.log('[Store] Migrating accounts table columns...')
+
+        // 1. account_type 컬럼 추가 (기존 데이터는 'naver'로 설정)
+        this.addColumnIfNotExists('accounts', 'account_type', "TEXT NOT NULL DEFAULT 'naver'")
+
+        // 2. 컬럼명 변경 (SQLite 3.25.0+)
+        this.db.exec('ALTER TABLE accounts RENAME COLUMN naver_id TO account_id')
+        console.log('[Store] Renamed column: naver_id → account_id')
+
+        this.db.exec('ALTER TABLE accounts RENAME COLUMN naver_password TO account_password')
+        console.log('[Store] Renamed column: naver_password → account_password')
+
+        console.log('[Store] Accounts table migration completed')
+      }
+    } catch (error) {
+      console.error('[Store] Accounts table migration error:', error)
+    }
+  }
+
+  /**
+   * cafes 테이블에 cafe_type 컬럼 추가 마이그레이션
+   * - cafe_type 컬럼 추가 (기본값 'naver')
+   * - 기존 데이터의 URL을 분석하여 cafe_type 자동 설정
+   */
+  migrateCafesTableColumns() {
+    try {
+      const tableInfo = this.db.prepare('PRAGMA table_info(cafes)').all()
+      const columns = tableInfo.map(col => col.name)
+
+      // cafe_type 컬럼이 없으면 추가
+      if (!columns.includes('cafe_type')) {
+        console.log('[Store] Migrating cafes table: adding cafe_type column...')
+
+        // 1. cafe_type 컬럼 추가 (기본값 'naver')
+        this.db.exec("ALTER TABLE cafes ADD COLUMN cafe_type TEXT NOT NULL DEFAULT 'naver'")
+        console.log('[Store] Added column: cafe_type')
+
+        // 2. 기존 데이터의 URL을 분석하여 cafe_type 설정
+        const cafes = this.db.prepare('SELECT id, cafe_url FROM cafes').all()
+        const updateStmt = this.db.prepare('UPDATE cafes SET cafe_type = ? WHERE id = ?')
+
+        for (const cafe of cafes) {
+          const cafeType = this.detectCafeTypeFromUrl(cafe.cafe_url)
+          if (cafeType !== 'naver') {
+            updateStmt.run(cafeType, cafe.id)
+            console.log(`[Store] Updated cafe ${cafe.id}: cafe_type = ${cafeType}`)
+          }
+        }
+
+        console.log('[Store] Cafes table migration completed')
+      }
+    } catch (error) {
+      console.error('[Store] Cafes table migration error:', error)
+    }
+  }
+
+  /**
+   * URL에서 카페 유형 감지
+   * @param {string} url - 카페 URL
+   * @returns {string} 카페 유형 ('naver' 또는 'daum')
+   */
+  detectCafeTypeFromUrl(url) {
+    if (!url) return 'naver'
+    const lowerUrl = url.toLowerCase()
+    if (lowerUrl.includes('cafe.daum.net')) return 'daum'
+    return 'naver'
   }
 
   /**

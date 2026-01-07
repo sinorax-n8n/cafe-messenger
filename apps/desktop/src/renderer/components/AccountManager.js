@@ -1,4 +1,4 @@
-// 네이버 계정 관리 컴포넌트
+// 계정 관리 컴포넌트 (네이버/다음 계정 지원)
 
 let accounts = []
 
@@ -11,8 +11,8 @@ export function createAccountManager() {
       <!-- 헤더 -->
       <div class="flex justify-between items-center mb-6">
         <div>
-          <h2 class="text-3xl font-bold text-gray-800">네이버 계정 관리</h2>
-          <p class="text-gray-600 mt-1">자동 로그인에 사용할 네이버 계정을 관리합니다</p>
+          <h2 class="text-3xl font-bold text-gray-800">계정 관리</h2>
+          <p class="text-gray-600 mt-1">자동 로그인에 사용할 계정을 관리합니다</p>
         </div>
         <button
           id="btn-add-account"
@@ -29,7 +29,8 @@ export function createAccountManager() {
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">활성</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">계정명</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">네이버 ID</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">유형</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">계정 ID</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">비밀번호</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">발송 현황</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">등록일</th>
@@ -64,20 +65,31 @@ export function createAccountManager() {
               />
             </div>
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-2">네이버 ID</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">계정 유형</label>
+              <select
+                id="input-account-type"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="naver">네이버</option>
+                <option value="daum">다음</option>
+              </select>
+            </div>
+            <div class="mb-4">
+              <label id="label-account-id" class="block text-sm font-medium text-gray-700 mb-2">네이버 ID</label>
               <input
                 type="text"
-                id="input-naver-id"
+                id="input-account-id"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="네이버 아이디"
                 required
               />
+              <p id="account-id-hint" class="hidden mt-1 text-xs text-gray-500">다음 계정은 이메일 형식으로 입력해주세요 (예: example@daum.net)</p>
             </div>
             <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">네이버 비밀번호</label>
+              <label id="label-account-password" class="block text-sm font-medium text-gray-700 mb-2">네이버 비밀번호</label>
               <input
                 type="password"
-                id="input-naver-password"
+                id="input-account-password"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="비밀번호"
                 required
@@ -122,7 +134,9 @@ async function renderAccountsTable() {
 
   tbody.innerHTML = accounts.map(account => {
     const sentCount = account.today_sent_count || 0
-    const badgeClass = getSentCountBadgeClass(sentCount)
+    const dailyLimit = getDailyLimit(account.account_type)
+    const badgeClass = getSentCountBadgeClass(sentCount, dailyLimit)
+    const typeBadge = getAccountTypeBadge(account.account_type)
 
     return `
     <tr class="hover:bg-gray-50">
@@ -139,13 +153,16 @@ async function renderAccountsTable() {
         <div class="font-medium text-gray-900">${escapeHtml(account.account_name)}</div>
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <div class="text-gray-900">${escapeHtml(account.naver_id)}</div>
+        ${typeBadge}
+      </td>
+      <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-gray-900">${escapeHtml(account.account_id)}</div>
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-gray-500">********</div>
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
-        <span class="${badgeClass}">${sentCount}/50</span>
+        <span class="${badgeClass}">${sentCount}/${dailyLimit}</span>
       </td>
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="text-sm text-gray-500">${formatDate(account.created_at)}</div>
@@ -168,7 +185,6 @@ async function renderAccountsTable() {
       try {
         await window.api.accounts.setActive(id)
         await loadAccounts()
-        showToast('활성 계정이 변경되었습니다', 'success')
       } catch (error) {
         console.error('활성 계정 변경 실패:', error)
         showToast('활성 계정 변경에 실패했습니다', 'error')
@@ -184,7 +200,6 @@ async function renderAccountsTable() {
         try {
           await window.api.accounts.delete(id)
           await loadAccounts()
-          showToast('계정이 삭제되었습니다', 'success')
         } catch (error) {
           console.error('계정 삭제 실패:', error)
           showToast('계정 삭제에 실패했습니다', 'error')
@@ -234,23 +249,39 @@ export function attachAccountManagerEvents() {
   // 모달 취소 버튼
   document.getElementById('btn-cancel-modal')?.addEventListener('click', closeModal)
 
+  // 계정 유형 드롭다운 변경 시 라벨/placeholder 동적 변경
+  document.getElementById('input-account-type')?.addEventListener('change', (e) => {
+    updateAccountTypeUI(e.target.value)
+  })
+
   // 계정 폼 제출
   document.getElementById('account-form')?.addEventListener('submit', async (e) => {
     e.preventDefault()
 
     const accountName = document.getElementById('input-account-name').value
-    const naverId = document.getElementById('input-naver-id').value
-    const naverPassword = document.getElementById('input-naver-password').value
+    const accountType = document.getElementById('input-account-type').value
+    const accountId = document.getElementById('input-account-id').value
+    const accountPassword = document.getElementById('input-account-password').value
+
+    // 다음 계정 이메일 형식 검증 (클라이언트 측)
+    if (accountType === 'daum') {
+      if (!accountId.includes('@') || !accountId.includes('.')) {
+        showToast('다음 계정은 이메일 형식의 ID가 필요합니다', 'error')
+        return
+      }
+    }
 
     try {
       await window.api.accounts.create({
         account_name: accountName,
-        naver_id: naverId,
-        naver_password: naverPassword
+        account_type: accountType,
+        account_id: accountId,
+        account_password: accountPassword
       })
 
       closeModal()
       await loadAccounts()
+      showToast('계정이 추가되었습니다', 'success')
     } catch (error) {
       console.error('계정 추가 실패:', error)
       showToast(error.message || '계정 추가에 실패했습니다', 'error')
@@ -259,6 +290,29 @@ export function attachAccountManagerEvents() {
 
   // 초기 데이터 로드
   loadAccounts()
+}
+
+/**
+ * 계정 유형에 따라 UI 동적 변경
+ * @param {string} type - 계정 유형 ('naver' 또는 'daum')
+ */
+function updateAccountTypeUI(type) {
+  const labelEl = document.getElementById('label-account-id')
+  const inputEl = document.getElementById('input-account-id')
+  const hintEl = document.getElementById('account-id-hint')
+  const pwLabelEl = document.getElementById('label-account-password')
+
+  if (type === 'daum') {
+    labelEl.textContent = '다음 이메일'
+    inputEl.placeholder = 'example@daum.net'
+    hintEl?.classList.remove('hidden')
+    pwLabelEl.textContent = '다음 비밀번호'
+  } else {
+    labelEl.textContent = '네이버 ID'
+    inputEl.placeholder = '네이버 아이디'
+    hintEl?.classList.add('hidden')
+    pwLabelEl.textContent = '네이버 비밀번호'
+  }
 }
 
 // 유틸리티 함수들
@@ -280,20 +334,44 @@ function showToast(message, type = 'info') {
 }
 
 /**
- * 발송 현황에 따른 배지 클래스 반환
+ * 계정 유형별 일일 발송 한도 반환
+ * @param {string} accountType - 계정 유형 ('naver' 또는 'daum')
+ * @returns {number} 일일 발송 한도
+ */
+function getDailyLimit(accountType) {
+  return accountType === 'daum' ? 20 : 50
+}
+
+/**
+ * 발송 현황에 따른 배지 클래스 반환 (비율 기반)
  * @param {number} count - 오늘 발송 수
+ * @param {number} limit - 일일 발송 한도
  * @returns {string} TailwindCSS 클래스
  */
-function getSentCountBadgeClass(count) {
+function getSentCountBadgeClass(count, limit = 50) {
   const baseClass = 'px-2 py-1 text-xs font-medium rounded-full'
+  const ratio = count / limit
 
-  if (count >= 50) {
+  if (ratio >= 1) {
     return `${baseClass} bg-red-100 text-red-800`
-  } else if (count >= 40) {
+  } else if (ratio >= 0.8) {
     return `${baseClass} bg-orange-100 text-orange-800`
-  } else if (count >= 30) {
+  } else if (ratio >= 0.6) {
     return `${baseClass} bg-yellow-100 text-yellow-800`
   } else {
     return `${baseClass} bg-green-100 text-green-800`
   }
+}
+
+/**
+ * 계정 유형에 따른 배지 HTML 반환
+ * @param {string} type - 계정 유형 ('naver' 또는 'daum')
+ * @returns {string} 배지 HTML
+ */
+function getAccountTypeBadge(type) {
+  if (type === 'daum') {
+    return '<span class="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">다음</span>'
+  }
+  // 기본값: 네이버
+  return '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">네이버</span>'
 }

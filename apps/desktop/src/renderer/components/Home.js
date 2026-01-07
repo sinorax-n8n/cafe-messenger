@@ -9,6 +9,14 @@ let selectedTemplate = null // 선택된 템플릿
 let templates = [] // 템플릿 목록
 let isSending = false // 발송 진행 중 여부
 let sendProgress = { current: 0, total: 0, todaySentCount: 0 } // 발송 진행 상황
+let activeAccountType = 'naver' // 활성 계정 유형 (네이버/다음)
+let pendingAccountSwitch = null // 계정 전환 후 발송 재개용
+
+// 계정 유형별 일일 발송 한도
+const DAILY_LIMIT = {
+  naver: 50,
+  daum: 20
+}
 
 // 탐색 기한 옵션
 const PERIOD_OPTIONS = [
@@ -80,7 +88,7 @@ export function createHome() {
 
             <!-- 오늘 발송 현황 표시 -->
             <div id="send-count-badge" class="hidden px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm font-medium">
-              오늘 발송: <span id="today-sent-count">0</span>/50
+              오늘 발송: <span id="today-sent-count">0</span>/<span id="daily-limit">50</span>
             </div>
 
             <button
@@ -139,7 +147,7 @@ export function createHome() {
 
                 <!-- 오늘 발송 제한 경고 -->
                 <div id="send-limit-warning" class="hidden mt-4 p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm">
-                  ⚠️ 오늘 발송 한도(50건)에 도달했습니다.
+                  ⚠️ 오늘 발송 한도(<span id="limit-warning-count">50</span>건)에 도달했습니다.
                 </div>
 
                 <!-- CAPTCHA 입력 필요 알림 -->
@@ -226,13 +234,19 @@ function showExploreView(show) {
 
 /**
  * 탐색 상태 UI 전환
+ * 크롤링 상태와 발송 상태 UI를 모두 관리
  */
 function showExploreStatus(status) {
   const crawlingEl = document.getElementById('crawling-status')
   const completeEl = document.getElementById('crawling-complete')
+  const sendingEl = document.getElementById('sending-status')
+  const sendCompleteEl = document.getElementById('sending-complete')
 
+  // 모든 상태 UI 숨김
   crawlingEl?.classList.add('hidden')
   completeEl?.classList.add('hidden')
+  sendingEl?.classList.add('hidden')
+  sendCompleteEl?.classList.add('hidden')
 
   switch (status) {
     case 'crawling':
@@ -494,22 +508,24 @@ function showSendingStatus(status) {
 
 /**
  * 로그인 플로우 시작
+ * Main 프로세스에서 발송 여유가 있는 계정을 자동 선택
  */
 async function startLoginFlow() {
   try {
-    const credentials = await window.api.accounts.getActiveCredentials()
-    if (!credentials) {
-      alert('활성화된 계정이 없습니다.')
-      return
-    }
-
     // 로그인 창 열기
     await window.api.naver.openLogin()
 
-    // 자동 로그인 시도
+    // 자동 로그인 시도 (Main에서 발송 가능한 계정 자동 선택)
     setTimeout(async () => {
       try {
-        await window.api.naver.autoLogin(credentials)
+        const result = await window.api.naver.autoLogin()
+        if (result.success) {
+          console.log('[Home] 자동 로그인 계정:', result.accountName || result.accountId)
+        } else if (result.noAvailableAccount) {
+          console.log('[Home] 발송 가능한 계정 없음')
+          // 로그인 창 닫기
+          await window.api.naver.closeWindow()
+        }
       } catch (err) {
         console.error('[Home] 자동 로그인 실패:', err)
       }
@@ -527,6 +543,17 @@ async function startLoginFlow() {
 async function startSendingMessages() {
   if (!selectedTemplate || collectedMembers.length === 0) {
     return
+  }
+
+  // 활성 계정 정보 조회하여 계정 유형 설정
+  try {
+    const credentials = await window.api.accounts.getActiveCredentials()
+    if (credentials && credentials.account_type) {
+      activeAccountType = credentials.account_type
+      console.log('[Home] 활성 계정 유형:', activeAccountType, '(한도:', DAILY_LIMIT[activeAccountType], '건)')
+    }
+  } catch (error) {
+    console.warn('[Home] 활성 계정 정보 조회 실패, 기본값 사용:', error)
   }
 
   isSending = true
@@ -575,26 +602,44 @@ function updateSendProgressUI(data) {
   const textEl = document.getElementById('sending-progress-text')
   const countBadge = document.getElementById('send-count-badge')
   const todayCountEl = document.getElementById('today-sent-count')
+  const dailyLimitEl = document.getElementById('daily-limit')
   const limitWarning = document.getElementById('send-limit-warning')
+  const limitWarningCount = document.getElementById('limit-warning-count')
+
+  // 현재 활성 계정의 일일 한도
+  const dailyLimit = DAILY_LIMIT[activeAccountType] || 50
+  const ratio = data.todaySentCount / dailyLimit
 
   // 오늘 발송 현황 표시 (초기 정보 또는 진행 중)
   if (countBadge && todayCountEl) {
     countBadge.classList.remove('hidden')
     todayCountEl.textContent = data.todaySentCount
 
-    // 색상 변경: 40건 이상이면 경고 색상
-    if (data.todaySentCount >= 40) {
+    // 동적 한도 표시
+    if (dailyLimitEl) {
+      dailyLimitEl.textContent = dailyLimit
+    }
+
+    // 한도 도달 경고 메시지의 한도도 업데이트
+    if (limitWarningCount) {
+      limitWarningCount.textContent = dailyLimit
+    }
+
+    // 색상 변경: 비율 기반
+    if (ratio >= 1) {
       countBadge.className = 'px-3 py-2 bg-red-100 text-red-800 rounded-lg text-sm font-medium'
-    } else if (data.todaySentCount >= 30) {
+    } else if (ratio >= 0.8) {
       countBadge.className = 'px-3 py-2 bg-orange-100 text-orange-800 rounded-lg text-sm font-medium'
-    } else {
+    } else if (ratio >= 0.6) {
       countBadge.className = 'px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg text-sm font-medium'
+    } else {
+      countBadge.className = 'px-3 py-2 bg-green-100 text-green-800 rounded-lg text-sm font-medium'
     }
   }
 
   // 초기 정보만 표시하는 경우 (발송 시작 전)
   if (data.initialInfo) {
-    console.log('[Home] 초기 발송 정보 수신 - 오늘 발송:', data.todaySentCount, '건')
+    console.log('[Home] 초기 발송 정보 수신 - 오늘 발송:', data.todaySentCount, '/', dailyLimit, '건')
     return
   }
 
@@ -619,6 +664,87 @@ function updateSendProgressUI(data) {
       member.sent = true
       renderMembersList()
     }
+  }
+}
+
+/**
+ * 활성화된 다음 카페가 있는지 확인
+ */
+async function hasActiveDaumCafes() {
+  try {
+    const cafes = await window.api.cafes.getAll()
+    return cafes.some(cafe => cafe.cafe_type === 'daum' && cafe.is_active === 1)
+  } catch (error) {
+    console.error('[Home] 다음 카페 확인 실패:', error)
+    return false
+  }
+}
+
+/**
+ * 다음 계정이 있는지 확인
+ */
+async function hasDaumAccounts() {
+  try {
+    const accounts = await window.api.accounts.getAll()
+    return accounts.some(acc => acc.account_type === 'daum')
+  } catch (error) {
+    console.error('[Home] 다음 계정 확인 실패:', error)
+    return false
+  }
+}
+
+/**
+ * 네이버 크롤링 결과 0명일 때 다음 카페 자동 폴백
+ * @returns {Promise<boolean>} 폴백 시작 여부
+ */
+async function tryDaumFallback() {
+  try {
+    const hasDaumCafe = await hasActiveDaumCafes()
+    if (!hasDaumCafe) {
+      console.log('[Home] 활성화된 다음 카페 없음 - 폴백 스킵')
+      return false
+    }
+
+    const hasDaum = await hasDaumAccounts()
+    if (!hasDaum) {
+      console.log('[Home] 다음 계정 없음 - 폴백 스킵')
+      return false
+    }
+
+    const resultEl = document.getElementById('crawling-result')
+    if (resultEl) {
+      resultEl.textContent = '네이버에서 회원을 찾지 못해 다음 카페를 탐색합니다...'
+    }
+
+    console.log('[Home] 다음 카페 자동 폴백 시작')
+    await window.api.daum.openLogin()
+    return true
+  } catch (error) {
+    console.error('[Home] 다음 카페 폴백 실패:', error)
+    return false
+  }
+}
+
+/**
+ * 다음 계정이 있으면 다음 카페 크롤링 시작 (네이버 발송 완료 후 자동 호출)
+ */
+async function startDaumCrawlingIfAvailable() {
+  try {
+    // 다음 계정 존재 여부 확인
+    const accounts = await window.api.accounts.getAll()
+    const hasDaumAccount = accounts.some(acc => acc.account_type === 'daum')
+
+    if (!hasDaumAccount) {
+      console.log('[Home] 다음 계정 없음 - 다음 카페 크롤링 스킵')
+      return
+    }
+
+    console.log('[Home] 다음 계정 확인됨 - 다음 카페 크롤링 시작')
+    await window.api.daum.openLogin()
+  } catch (error) {
+    console.error('[Home] 다음 로그인 창 열기 실패:', error)
+    // 다음 로그인 실패해도 에러 표시만 하고 진행
+    console.log('[Home] 다음 카페 크롤링 스킵')
   }
 }
 
@@ -650,6 +776,10 @@ function handleSendComplete(data) {
   showSendingStatus('complete')
   updateSendButtonState()
   renderMembersList()
+
+  // 네이버 발송 완료 후 항상 다음 카페 크롤링 시작 (성공/실패/취소 무관)
+  console.log('[Home] 네이버 작업 완료 - 다음 카페 크롤링 시작')
+  startDaumCrawlingIfAvailable()
 }
 
 /**
@@ -780,6 +910,14 @@ export function attachHomeEvents() {
   window.api.naver.removeAllListeners('naver:sendComplete')
   window.api.naver.removeAllListeners('naver:captchaRequired')
   window.api.naver.removeAllListeners('naver:captchaResolved')
+  window.api.naver.removeAllListeners('naver:noAvailableAccount')
+  console.log('[Home] 다음 IPC 리스너 제거 시작')
+  window.api.daum.removeAllListeners('daum:loginComplete')
+  window.api.daum.removeAllListeners('daum:fetchCafeIdsProgress')
+  window.api.daum.removeAllListeners('daum:fetchCafeIdsComplete')
+  window.api.daum.removeAllListeners('daum:crawlProgress')
+  window.api.daum.removeAllListeners('daum:crawlComplete')
+  console.log('[Home] 다음 IPC 리스너 제거 완료')
 
   // IPC 이벤트 리스너: 크롤링 진행
   window.api.naver.onCrawlProgress((event, data) => {
@@ -796,7 +934,7 @@ export function attachHomeEvents() {
   })
 
   // IPC 이벤트 리스너: 크롤링 완료
-  window.api.naver.onCrawlComplete((event, data) => {
+  window.api.naver.onCrawlComplete(async (event, data) => {
     console.log('[Home] 크롤링 완료:', data)
     isCrawling = false
 
@@ -807,23 +945,71 @@ export function attachHomeEvents() {
     }
 
     const resultEl = document.getElementById('crawling-result')
-    if (resultEl) {
-      if (data.success) {
-        const periodLabel = PERIOD_OPTIONS.find(p => p.value === data.datePeriod)?.label || data.datePeriod
+
+    if (data.success) {
+      const periodLabel = PERIOD_OPTIONS.find(p => p.value === data.datePeriod)?.label || data.datePeriod
+
+      // 네이버 크롤링 결과 0명일 때 다음 카페 폴백
+      if (data.count === 0) {
+        console.log('[Home] 네이버 크롤링 결과 0명 - 다음 카페 폴백 시도')
+
+        if (resultEl) {
+          resultEl.textContent = `${periodLabel} 이내 네이버 카페에서 회원을 찾지 못했습니다. 다음 카페 확인 중...`
+        }
+
+        const fallbackStarted = await tryDaumFallback()
+
+        if (!fallbackStarted) {
+          if (resultEl) {
+            resultEl.textContent = `${periodLabel} 이내 회원이 없습니다.`
+          }
+          showExploreStatus('complete')
+          renderMembersList()
+        }
+        // 폴백 시작된 경우: daum:loginComplete 이벤트에서 처리됨
+        return
+      }
+
+      // 기존 로직: 결과 있을 때
+      if (resultEl) {
         resultEl.textContent = `${periodLabel} 이내 총 ${data.count}명의 회원을 수집했습니다.`
-      } else {
+      }
+    } else {
+      if (resultEl) {
         resultEl.textContent = `오류: ${data.error}`
       }
     }
 
     showExploreStatus('complete')
-    renderMembersList() // 버튼 활성화 상태 업데이트
+    renderMembersList()
   })
 
   // IPC 이벤트 리스너: 로그인 완료
   console.log('[Home] onLoginComplete 이벤트 리스너 등록')
-  window.api.naver.onLoginComplete((event, data) => {
+  window.api.naver.onLoginComplete(async (event, data) => {
     console.log('[Home] 로그인 완료 이벤트 수신:', data)
+
+    // 계정 전환 후 발송 재개 처리
+    if (data.success && pendingAccountSwitch) {
+      console.log('[Home] 계정 전환 후 발송 재개')
+      const { remainingMembers, templateContent } = pendingAccountSwitch
+      pendingAccountSwitch = null
+
+      // 남은 회원에게 발송 재개
+      isSending = true
+      showSendingStatus('sending')
+
+      try {
+        await window.api.naver.startSending(remainingMembers, templateContent)
+      } catch (error) {
+        console.error('[Home] 발송 재개 실패:', error)
+        alert('발송 재개에 실패했습니다: ' + error.message)
+        isSending = false
+        showSendingStatus('complete')
+      }
+      return
+    }
+
     console.log('[Home] 현재 상태 - selectedTemplate:', !!selectedTemplate, ', collectedMembers:', collectedMembers.length)
     if (data.success && selectedTemplate && collectedMembers.length > 0) {
       // 로그인 성공 시 자동으로 발송 시작
@@ -858,6 +1044,160 @@ export function attachHomeEvents() {
     document.getElementById('captcha-alert')?.classList.add('hidden')
   })
 
+  // IPC 이벤트 리스너: 발송 가능한 계정 없음
+  window.api.naver.onNoAvailableAccount(async (event, data) => {
+    console.log('[Home] 발송 가능한 계정 없음:', data)
+    alert(data.message || '발송 가능한 네이버 계정이 없습니다.\n모든 계정이 일일 발송 한도(50건)에 도달했습니다.')
+
+    // autoLogin에서 발생한 경우 (results가 없음) → 직접 다음 크롤링 시작
+    // startSending에서 발생한 경우 (results가 있음) → sendComplete에서 처리됨
+    if (!data.results) {
+      console.log('[Home] autoLogin 단계에서 계정 없음 - 다음 카페 크롤링 시작')
+      startDaumCrawlingIfAvailable()
+    }
+  })
+
+  // IPC 이벤트 리스너: 계정 전환 필요 (한도 도달 시 다른 계정으로 전환)
+  window.api.naver.onAccountSwitchRequired(async (event, data) => {
+    console.log('[Home] 계정 전환 필요:', data)
+
+    const { nextAccountId, nextAccountName, remainingMembers, currentResults, templateContent } = data
+
+    // 현재 발송 결과 표시
+    const resultEl = document.getElementById('sending-result')
+    if (resultEl) {
+      resultEl.textContent = `한도 도달 - 성공: ${currentResults.success}명. ${nextAccountName} 계정으로 전환합니다...`
+    }
+
+    // 상태 저장 (로그인 완료 후 발송 재개용)
+    pendingAccountSwitch = {
+      remainingMembers,
+      templateContent
+    }
+
+    try {
+      // 1. 다음 계정 활성화
+      await window.api.accounts.setActive(nextAccountId)
+      console.log(`[Home] 계정 활성화 완료: ${nextAccountName}`)
+
+      // 2. 네이버 로그인 창 열기 (자동 로그인)
+      const credentials = await window.api.accounts.getActiveCredentials()
+      await window.api.naver.autoLogin(credentials)
+    } catch (error) {
+      console.error('[Home] 계정 전환 실패:', error)
+      alert('계정 전환에 실패했습니다: ' + error.message)
+      pendingAccountSwitch = null
+    }
+  })
+
+  // IPC 이벤트 리스너: 다음 로그인 완료
+  console.log('[Home] daum:loginComplete 리스너 등록')
+  window.api.daum.onLoginComplete((event, data) => {
+    console.log('[Home] ★★★ 다음 로그인 완료 이벤트 수신 ★★★:', data)
+    if (data.success) {
+      console.log('[Home] 다음 로그인 성공 - 탐색 화면 전환 및 카페 정보 추출 시작')
+
+      // 탐색 화면으로 전환 및 크롤링 상태 표시
+      showExploreView(true)
+      showExploreStatus('crawling')
+      isCrawling = true
+      collectedMembers = []
+      renderMembersList()
+      updateCrawlProgress(0, '카페 정보 확인 중...', null)
+
+      // 카페 정보 추출 자동 시작
+      window.api.daum.fetchCafeIds()
+    }
+  })
+
+  // IPC 이벤트 리스너: 다음 카페 정보 추출 진행
+  window.api.daum.onFetchCafeIdsProgress((event, data) => {
+    console.log('[Home] 다음 카페 정보 추출 진행:', data)
+    // 권한 확인 상태 UI 업데이트
+    updateCrawlProgress(0, `권한 확인 중: ${data.cafe}`, null)
+  })
+
+  // IPC 이벤트 리스너: 다음 카페 정보 추출 완료
+  window.api.daum.onFetchCafeIdsComplete((event, data) => {
+    console.log('[Home] 다음 카페 정보 추출 완료:', data)
+    if (data.success && data.permittedCount > 0) {
+      console.log('[Home] 권한 확인 완료 - 다음 카페 회원 크롤링 시작')
+      // 크롤링 시작 상태 메시지 업데이트
+      updateCrawlProgress(0, `${data.permittedCount}개 카페 크롤링 시작...`, selectedPeriod)
+      // 권한 있는 카페가 있으면 자동으로 크롤링 시작 (날짜 필터 포함)
+      window.api.daum.startCrawling({ datePeriod: selectedPeriod })
+    } else if (data.success && data.permittedCount === 0) {
+      // 권한 없음 - 초기 화면으로 돌아가기
+      isCrawling = false
+      showExploreView(false)
+      alert('권한이 확인된 다음 카페가 없습니다.\n정회원 이상 등급이 필요합니다.')
+    } else {
+      // 오류 - 초기 화면으로 돌아가기
+      isCrawling = false
+      showExploreView(false)
+      alert(`다음 카페 정보 추출 실패: ${data.error}`)
+    }
+  })
+
+  // IPC 이벤트 리스너: 다음 카페 크롤링 진행
+  window.api.daum.onCrawlProgress((event, data) => {
+    console.log('[Home] 다음 카페 크롤링 진행:', data)
+
+    if (data.member) {
+      // encUserId를 memberKey로 사용하여 네이버 회원과 동일한 구조로 저장
+      const member = {
+        ...data.member,
+        memberKey: data.member.encUserId  // 호환성을 위해 memberKey 추가
+      }
+      if (!collectedMembers.find(m => m.memberKey === member.memberKey)) {
+        collectedMembers.push(member)
+        renderMembersList()
+      }
+    }
+
+    updateCrawlProgress(data.current, data.cafe, null)
+  })
+
+  // IPC 이벤트 리스너: 다음 카페 크롤링 완료
+  window.api.daum.onCrawlComplete((event, data) => {
+    console.log('[Home] 다음 카페 크롤링 완료:', data)
+    isCrawling = false
+
+    // 진행바 100% 완료
+    const barEl = document.getElementById('crawling-progress-bar')
+    if (barEl) {
+      barEl.style.width = '100%'
+    }
+
+    const resultEl = document.getElementById('crawling-result')
+    if (resultEl) {
+      if (data.success) {
+        resultEl.textContent = `총 ${data.count}명의 다음 카페 회원을 수집했습니다.`
+      } else {
+        resultEl.textContent = `오류: ${data.error}`
+      }
+    }
+
+    if (data.success) {
+      // 크롤링 결과로 collectedMembers 업데이트
+      if (data.members && data.members.length > 0) {
+        data.members.forEach(member => {
+          const memberWithKey = {
+            ...member,
+            memberKey: member.encUserId  // 호환성을 위해 memberKey 추가
+          }
+          if (!collectedMembers.find(m => m.memberKey === memberWithKey.memberKey)) {
+            collectedMembers.push(memberWithKey)
+          }
+        })
+      }
+    }
+
+    // 완료 상태 UI 표시 (alert 대신)
+    showExploreStatus('complete')
+    renderMembersList()
+  })
+
   // 중지하기 버튼
   document.getElementById('btn-stop-sending')?.addEventListener('click', async () => {
     if (!isSending) return
@@ -881,6 +1221,8 @@ export function attachHomeEvents() {
     collectedMembers = []
     selectedPeriod = '1day'
     selectedTemplate = null
+    isCrawling = false
+    isExploring = false
     isSending = false
     sendProgress = { current: 0, total: 0, todaySentCount: 0 }
 
@@ -892,6 +1234,9 @@ export function attachHomeEvents() {
 
     // 발송 현황 배지 숨김
     document.getElementById('send-count-badge')?.classList.add('hidden')
+
+    // CAPTCHA 알림 숨김
+    document.getElementById('captcha-alert')?.classList.add('hidden')
 
     // 초기 화면으로 돌아가기
     showExploreView(false)

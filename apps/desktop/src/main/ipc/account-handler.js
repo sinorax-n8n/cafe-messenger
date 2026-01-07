@@ -1,4 +1,4 @@
-// 네이버 계정 관리 IPC 핸들러
+// 계정 관리 IPC 핸들러 (네이버/다음 계정 지원)
 
 const crypto = require('crypto');
 
@@ -52,7 +52,7 @@ function register(ipcMain, store) {
       // 비밀번호는 마스킹하여 반환 (보안)
       return accounts.map(account => ({
         ...account,
-        naver_password: '********' // 비밀번호 마스킹
+        account_password: '********' // 비밀번호 마스킹
       }));
     } catch (error) {
       console.error('[IPC] accounts:getAll error:', error);
@@ -63,36 +63,47 @@ function register(ipcMain, store) {
   // 계정 생성
   ipcMain.handle('accounts:create', async (event, data) => {
     try {
-      const { account_name, naver_id, naver_password } = data;
+      const { account_name, account_type, account_id, account_password } = data;
 
       // 유효성 검사
-      if (!account_name || !naver_id || !naver_password) {
+      if (!account_name || !account_id || !account_password) {
         throw new Error('필수 필드가 누락되었습니다');
       }
 
+      // account_type 기본값
+      const type = account_type || 'naver';
+
+      // 다음 계정 이메일 형식 검증
+      if (type === 'daum') {
+        if (!account_id.includes('@') || !account_id.includes('.')) {
+          throw new Error('다음 계정은 이메일 형식의 ID가 필요합니다');
+        }
+      }
+
       // 중복 확인
-      const existing = store.find('accounts', acc => acc.naver_id === naver_id);
+      const existing = store.find('accounts', acc => acc.account_id === account_id);
       if (existing.length > 0) {
-        throw new Error('이미 등록된 네이버 ID입니다');
+        throw new Error('이미 등록된 계정 ID입니다');
       }
 
       // 비밀번호 암호화
-      const encrypted_password = encryptPassword(naver_password);
+      const encrypted_password = encryptPassword(account_password);
 
       // 계정 생성
       const account = store.create('accounts', {
         account_name,
-        naver_id,
-        naver_password: encrypted_password,
+        account_type: type,
+        account_id,
+        account_password: encrypted_password,
         is_active: 0 // 기본값: 비활성
       });
 
-      console.log(`[IPC] Created account: ${account_name} (${naver_id})`);
+      console.log(`[IPC] Created account: ${account_name} (${type}: ${account_id})`);
 
       // 비밀번호 마스킹하여 반환
       return {
         ...account,
-        naver_password: '********'
+        account_password: '********'
       };
     } catch (error) {
       console.error('[IPC] accounts:create error:', error);
@@ -106,10 +117,10 @@ function register(ipcMain, store) {
       const updates = { ...data };
 
       // 비밀번호 변경 시 암호화
-      if (updates.naver_password && updates.naver_password !== '********') {
-        updates.naver_password = encryptPassword(updates.naver_password);
+      if (updates.account_password && updates.account_password !== '********') {
+        updates.account_password = encryptPassword(updates.account_password);
       } else {
-        delete updates.naver_password; // 변경하지 않음
+        delete updates.account_password; // 변경하지 않음
       }
 
       const account = store.update('accounts', id, updates);
@@ -122,7 +133,7 @@ function register(ipcMain, store) {
       // 비밀번호 마스킹하여 반환
       return {
         ...account,
-        naver_password: '********'
+        account_password: '********'
       };
     } catch (error) {
       console.error('[IPC] accounts:update error:', error);
@@ -165,7 +176,7 @@ function register(ipcMain, store) {
 
       return {
         ...account,
-        naver_password: '********'
+        account_password: '********'
       };
     } catch (error) {
       console.error('[IPC] accounts:setActive error:', error);
@@ -183,8 +194,9 @@ function register(ipcMain, store) {
 
       const account = activeAccounts[0];
       return {
-        naver_id: account.naver_id,
-        naver_password: decryptPassword(account.naver_password)
+        account_type: account.account_type,
+        account_id: account.account_id,
+        account_password: decryptPassword(account.account_password)
       };
     } catch (error) {
       console.error('[IPC] accounts:getActiveCredentials error:', error);

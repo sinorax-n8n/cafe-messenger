@@ -143,6 +143,7 @@ async function main() {
       console.log(`[Success] ${nodeFile}`)
       console.log(`[Size] ${(stats.size / 1024 / 1024).toFixed(2)} MB`)
       console.log('='.repeat(60))
+      process.exit(0)
     } else if (fs.existsSync(altPath)) {
       // build/Release 폴더에서 상위로 이동
       console.log('[Move] build/Release에서 파일 이동 중...')
@@ -154,6 +155,7 @@ async function main() {
       console.log(`[Success] ${nodeFile}`)
       console.log(`[Size] ${(stats.size / 1024 / 1024).toFixed(2)} MB`)
       console.log('='.repeat(60))
+      process.exit(0)
     } else {
       // 파일 찾기
       console.log('[Warning] better_sqlite3.node 파일을 찾을 수 없습니다')

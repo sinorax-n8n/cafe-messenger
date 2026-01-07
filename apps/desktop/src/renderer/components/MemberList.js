@@ -55,11 +55,10 @@ export function createMemberList() {
         <table class="w-full table-fixed">
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th class="w-1/5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">카페</th>
-              <th class="w-1/5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">닉네임</th>
-              <th class="w-1/5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">사용자 ID</th>
-              <th class="w-1/5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">등록일</th>
-              <th class="w-1/5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+              <th class="w-1/4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">카페</th>
+              <th class="w-1/4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">닉네임</th>
+              <th class="w-1/4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">등록일</th>
+              <th class="w-1/4 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
             </tr>
           </thead>
         </table>
@@ -105,17 +104,7 @@ export function createMemberList() {
                 required
               />
             </div>
-            <div class="mb-6">
-              <label class="block text-sm font-medium text-gray-700 mb-2">사용자 ID (선택)</label>
-              <input
-                type="text"
-                id="input-user-id"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="네이버 사용자 ID"
-              />
-              <p class="text-xs text-gray-500 mt-1">네이버 고유 사용자 ID (선택사항)</p>
-            </div>
-            <div class="flex space-x-3">
+            <div class="flex space-x-3 mt-6">
               <button
                 type="submit"
                 class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -159,19 +148,16 @@ async function renderMembersTable() {
     const cafe = cafes.find(c => c.id === member.cafe_id)
     return `
       <tr class="hover:bg-gray-50">
-        <td class="w-1/5 px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis">
+        <td class="w-1/4 px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis">
           <div class="text-sm font-medium text-gray-900 truncate">${cafe ? escapeHtml(cafe.cafe_name) : '-'}</div>
         </td>
-        <td class="w-1/5 px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis">
+        <td class="w-1/4 px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis">
           <div class="font-medium text-gray-900 truncate">${escapeHtml(member.nickname)}</div>
         </td>
-        <td class="w-1/5 px-6 py-4 whitespace-nowrap overflow-hidden text-ellipsis">
-          <div class="text-sm text-gray-500 truncate">${member.user_id || '-'}</div>
-        </td>
-        <td class="w-1/5 px-6 py-4 whitespace-nowrap">
+        <td class="w-1/4 px-6 py-4 whitespace-nowrap">
           <div class="text-sm text-gray-500">${formatDate(member.created_at)}</div>
         </td>
-        <td class="w-1/5 px-6 py-4 whitespace-nowrap text-sm font-medium">
+        <td class="w-1/4 px-6 py-4 whitespace-nowrap text-sm font-medium">
           <button
             class="btn-delete-member text-red-600 hover:text-red-900"
             data-id="${member.id}"
@@ -309,7 +295,6 @@ export function attachMemberListEvents() {
 
     const cafeId = document.getElementById('input-cafe-id').value
     const nickname = document.getElementById('input-nickname').value
-    const userId = document.getElementById('input-user-id').value
 
     if (!cafeId) {
       showToast('카페를 선택해주세요', 'error')
@@ -320,7 +305,7 @@ export function attachMemberListEvents() {
       await window.api.members.create({
         cafe_id: parseInt(cafeId),
         nickname: nickname,
-        user_id: userId || null
+        user_id: null
       })
 
       closeModal()

@@ -64,6 +64,33 @@ contextBridge.exposeInMainWorld('api', {
     onSendComplete: (callback) => ipcRenderer.on('naver:sendComplete', callback),
     onCaptchaRequired: (callback) => ipcRenderer.on('naver:captchaRequired', callback),
     onCaptchaResolved: (callback) => ipcRenderer.on('naver:captchaResolved', callback),
+    onNoAvailableAccount: (callback) => ipcRenderer.on('naver:noAvailableAccount', callback),
+    onAccountSwitchRequired: (callback) => ipcRenderer.on('naver:accountSwitchRequired', callback),
+    // 이벤트 리스너 제거 (cleanup용)
+    removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+  },
+
+  // 다음 로그인 관리
+  daum: {
+    openLogin: () => ipcRenderer.invoke('daum:openLogin'),
+    closeWindow: () => ipcRenderer.invoke('daum:closeWindow'),
+    checkLogin: () => ipcRenderer.invoke('daum:checkLogin'),
+    // 카페 정보 추출 (grpid, fldid)
+    fetchCafeIds: () => ipcRenderer.invoke('daum:fetchCafeIds'),
+    getCafeInfo: (cafeId) => ipcRenderer.invoke('daum:getCafeInfo', cafeId),
+    getAllCafeInfo: () => ipcRenderer.invoke('daum:getAllCafeInfo'),
+    // 쿠키 캐시 관리
+    getCookieCache: () => ipcRenderer.invoke('daum:getCookieCache'),
+    clearCookieCache: () => ipcRenderer.invoke('daum:clearCookieCache'),
+    // 회원 크롤링
+    startCrawling: (options) => ipcRenderer.invoke('daum:startCrawling', options),
+    // 이벤트 리스너 (Main → Renderer)
+    onLoginStatusChange: (callback) => ipcRenderer.on('daum:loginStatusChanged', callback),
+    onLoginComplete: (callback) => ipcRenderer.on('daum:loginComplete', callback),
+    onFetchCafeIdsProgress: (callback) => ipcRenderer.on('daum:fetchCafeIdsProgress', callback),
+    onFetchCafeIdsComplete: (callback) => ipcRenderer.on('daum:fetchCafeIdsComplete', callback),
+    onCrawlProgress: (callback) => ipcRenderer.on('daum:crawlProgress', callback),
+    onCrawlComplete: (callback) => ipcRenderer.on('daum:crawlComplete', callback),
     // 이벤트 리스너 제거 (cleanup용)
     removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
   }

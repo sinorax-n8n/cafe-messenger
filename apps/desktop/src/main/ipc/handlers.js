@@ -6,10 +6,25 @@ const { ipcMain, BrowserWindow } = require('electron');
 /**
  * 메인 윈도우 참조를 동적으로 가져오는 함수
  * IPC 핸들러에서 필요할 때 호출
+ * 주의: 여러 창이 열려 있을 때 올바른 메인 윈도우를 찾아야 함
  */
 function getMainWindow() {
   const windows = BrowserWindow.getAllWindows();
-  return windows.length > 0 ? windows[0] : null;
+
+  // 창이 없으면 null 반환
+  if (windows.length === 0) return null;
+
+  // 메인 윈도우 식별: 크기가 가장 크고, 제목에 '로그인'이 없는 창
+  // (로그인 창: 500x700, 메인 창: 1200x800)
+  const mainWindow = windows.find(win => {
+    const bounds = win.getBounds();
+    const title = win.getTitle();
+    // 메인 윈도우는 크기가 크고, 제목에 '로그인'이 없음
+    return bounds.width >= 800 && !title.includes('로그인');
+  });
+
+  // 찾지 못하면 첫 번째 창 반환 (fallback)
+  return mainWindow || windows[0];
 }
 
 /**

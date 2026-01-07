@@ -1,6 +1,18 @@
 // 카페 링크 관리 IPC 핸들러
 
 /**
+ * URL에서 카페 유형 감지
+ * @param {string} url - 카페 URL
+ * @returns {string} 카페 유형 ('naver' 또는 'daum')
+ */
+function detectCafeType(url) {
+  if (!url) return 'naver'
+  const lowerUrl = url.toLowerCase()
+  if (lowerUrl.includes('cafe.daum.net')) return 'daum'
+  return 'naver'
+}
+
+/**
  * IPC 핸들러 등록
  * @param {object} ipcMain - Electron IPC 메인 모듈
  * @param {object} store - 초기화된 DataStore 인스턴스
@@ -32,9 +44,14 @@ function register(ipcMain, store) {
         throw new Error('이미 등록된 카페 URL입니다');
       }
 
+      // URL에서 카페 유형 자동 감지
+      const cafe_type = detectCafeType(cafe_url);
+      console.log(`[IPC] Detected cafe type: ${cafe_type} from URL: ${cafe_url}`);
+
       // 카페 생성
       const cafe = store.create('cafes', {
         cafe_name,
+        cafe_type,
         cafe_url,
         cafe_id: cafe_id || null,
         is_active: 1 // 기본값: 활성

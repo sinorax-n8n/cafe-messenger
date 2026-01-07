@@ -18,6 +18,9 @@
 ```bash
 # 핫 리로드가 포함된 개발 서버 시작
 docker-compose up desktop-dev
+
+# Windows 배포판 빌드
+docker-compose run desktop-build npm run make:win
 ```
 
 ### NPM 스크립트
@@ -39,6 +42,88 @@ npm test               # 아직 구현되지 않음 (에러로 종료됨)
 - **개발 서버 포트**: 5173 (Vite dev server)
 - **node_modules**: 로컬 파일시스템 오염 방지를 위해 네임드 볼륨 `desktop_node_modules`에 저장
 - **컨테이너 작업 디렉토리**: `/work/apps/desktop`
+
+## 아키텍처 개요
+
+### Electron 멀티 프로세스 모델
+
+이 애플리케이션은 Electron의 보안 중심 멀티 프로세스 아키텍처를 따릅니다:
+
+```
+Main Process (main.js)
+    ↓ IPC 핸들러 등록
+IPC Handlers (accounts, cafes, templates, members, naver)
+    ↓ 데이터 저장
+SQLite DataStore (better-sqlite3)
+    ↓ 생성
+BrowserWindow (1200x800)
+    ↓ 로드
+index.html (엄격한 CSP)
+    ↓ 주입
+preload.js (contextBridge)
+    ↓ window.api 노출
+renderer.js (라우팅 + 컴포넌트 초기화)
+    ↓ 동적 로딩
+Components (Home, AccountManager, CafeManager, TemplateManager, MemberList)
+```
+
+### 프로세스별 역할
+
+- **Main Process** (`apps/desktop/src/main/main.js`)
+  - 애플리케이션 진입점 (package.json의 `main` 필드에 정의됨)
+  - IPC 핸들러 등록 (`registerIpcHandlers()`)
+  - BrowserWindow 인스턴스 생성 (1200x800)
+  - 앱 생명주기 이벤트 처리 (ready, activate, window-all-closed)
+  - 플랫폼별 동작 처리 (macOS vs Windows/Linux)
+
+- **IPC Handlers** (`apps/desktop/src/main/ipc/`)
+  - `handlers.js`: 모든 IPC 핸들러 등록
+  - `account-handler.js`: 네이버 계정 CRUD + AES-256-CBC 암호화
+  - `cafe-handler.js`: 카페 링크 CRUD
+  - `template-handler.js`: 쪽지 템플릿 CRUD
+  - `member-handler.js`: 회원 CRUD
+  - `naver-handler.js`: 네이버 로그인, 크롤링, 쪽지 발송
+
+- **Data Store** (`apps/desktop/src/main/store/`)
+  - `index.js`: SQLite 데이터 저장소 (Singleton 패턴, better-sqlite3 사용)
+  - `schema.js`: 테이블 스키마 정의
+  - 4개 테이블: accounts, cafes, templates, members
+  - CRUD 메서드: create, getAll, getById, findOne, update, delete
+  - 특수 메서드: `setSentCount()` - 발송 현황 동기화
+
+- **Preload Script** (`apps/desktop/src/preload/preload.js`)
+  - Main 프로세스와 Renderer 프로세스 간의 보안 브리지
+  - `contextBridge`를 사용하여 `window.api` 객체 노출
+  - 5개 네임스페이스: api.accounts, api.cafes, api.templates, api.members, api.naver
+  - 각 네임스페이스는 CRUD 메서드 및 이벤트 리스너 제공
+
+- **Renderer Process** (`apps/desktop/src/renderer/`)
+  - `renderer.js`: 앱 초기화, 라우팅, 컴포넌트 로딩
+  - `components/Layout.js`: 메인 레이아웃 (사이드바 + 콘텐츠 영역)
+  - `components/Sidebar.js`: 네비게이션 메뉴 (5개 메뉴 항목)
+  - `components/Home.js`: 홈 화면 (회원 탐색 → 쪽지 발송 플로우)
+  - `components/AccountManager.js`: 네이버 계정 관리 UI
+  - `components/CafeManager.js`: 카페 링크 관리 UI
+  - `components/TemplateManager.js`: 쪽지 템플릿 관리 UI
+  - `components/MemberList.js`: 발송 제외 회원 관리 UI
+
+- **HTML Shell** (`apps/desktop/src/renderer/index.html`)
+  - 엄격한 Content Security Policy (스크립트는 'self'만 허용)
+  - TailwindCSS 스타일링
+  - 빈 `<div id="app"></div>` 컨테이너 (동적 렌더링)
+
+### 주요 아키텍처 결정사항
+
+- **보안 우선 접근**: Context isolation 강제, 엄격한 CSP, 최소한의 renderer 접근 권한
+- **Docker 우선 개발**: 모든 개발과 빌드가 컨테이너에서 수행됨
+- **모노레포 구조**: `apps/` 디렉토리는 멀티 앱 아키텍처를 시사 (현재는 `desktop/`만 존재)
+- **네임드 볼륨**: 호스트 파일시스템의 node_modules 오염 방지
+- **Windows 전용 빌드**: forge.config.js가 win32 플랫폼만 설정됨 (ZIP 포맷)
+- **SQLite 데이터 저장**: better-sqlite3 사용, 동기 API
+- **AES-256-CBC 암호화**: 네이버 계정 비밀번호 보안 저장
+- **컴포넌트 기반 아키텍처**: ES6 모듈, createXxx() + attachXxxEvents() 패턴
+- **Vite 번들링**: `inlineDynamicImports: true`로 모든 로컬 모듈을 단일 번들로 통합
+- **TailwindCSS + PostCSS**: Vite와 통합된 유틸리티 기반 스타일링
 
 ## 프로젝트 구조
 
@@ -170,4 +255,9 @@ cafe-messenger/
 **3. ZIP maker 오류 (일부 해결)**
 - **문제**: `spawn zip ENOENT` - zip 명령어 PATH 문제
 - **현재 상태**: 패키징은 성공, ZIP 생성만 실패 (실행 파일은 정상 생성됨)
-- **Workaround**: `artifacts/cafe-messenger-win32-x64/` 디렉토리를 수동으로 압
+- **Workaround**: `artifacts/cafe-messenger-win32-x64/` 디렉토리를 수동으로 압축
+
+### 개발 팀
+
+- **작성자**: 김동현
+- **언어 컨텍스트**: 한국어 개발팀 (docker-compose.yml에 한글 주석 사용)

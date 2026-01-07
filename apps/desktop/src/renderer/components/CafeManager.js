@@ -12,7 +12,7 @@ export function createCafeManager() {
       <div class="flex justify-between items-center mb-6">
         <div>
           <h2 class="text-3xl font-bold text-gray-800">카페 링크 관리</h2>
-          <p class="text-gray-600 mt-1">자동 접속할 네이버 카페를 관리합니다</p>
+          <p class="text-gray-600 mt-1">자동 접속할 네이버/다음 카페를 관리합니다</p>
         </div>
         <button
           id="btn-add-cafe"
@@ -23,14 +23,15 @@ export function createCafeManager() {
       </div>
 
       <!-- 카페 목록 테이블 -->
-      <div class="bg-white rounded-lg shadow-md overflow-hidden">
-        <table class="w-full">
+      <div class="bg-white rounded-lg shadow-md overflow-x-auto">
+        <table class="w-full min-w-max">
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr>
               <th class="w-16 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">활성</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">카페명</th>
+              <th class="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">유형</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">카페 URL</th>
-              <th class="w-24 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
+              <th class="w-16 px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky right-0 bg-gray-50">작업</th>
             </tr>
           </thead>
           <tbody id="cafes-table-body" class="bg-white divide-y divide-gray-200">
@@ -66,10 +67,10 @@ export function createCafeManager() {
                 type="url"
                 id="input-cafe-url"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="https://cafe.naver.com/..."
+                placeholder="https://cafe.naver.com/카페명"
                 required
               />
-              <p class="text-xs text-gray-500 mt-1">전체 URL을 입력하세요</p>
+              <p id="cafe-url-hint" class="text-xs text-gray-500 mt-1">전체 URL을 입력하세요 (카페 유형 자동 감지)</p>
             </div>
             <div class="flex space-x-3">
               <button
@@ -108,8 +109,10 @@ async function renderCafesTable() {
 
   noCafes?.classList.add('hidden')
 
-  tbody.innerHTML = cafes.map(cafe => `
-    <tr class="hover:bg-gray-50">
+  tbody.innerHTML = cafes.map(cafe => {
+    const typeBadge = getCafeTypeBadge(cafe.cafe_type)
+    return `
+    <tr class="group hover:bg-gray-50">
       <td class="px-6 py-4 whitespace-nowrap text-center">
         <input
           type="checkbox"
@@ -121,6 +124,9 @@ async function renderCafesTable() {
       <td class="px-6 py-4 whitespace-nowrap">
         <div class="font-medium text-gray-900">${escapeHtml(cafe.cafe_name)}</div>
       </td>
+      <td class="px-6 py-4 whitespace-nowrap">
+        ${typeBadge}
+      </td>
       <td class="px-6 py-4">
         <div class="text-sm text-blue-600 truncate max-w-md">
           <a href="${escapeHtml(cafe.cafe_url)}" target="_blank" class="hover:underline">
@@ -128,16 +134,20 @@ async function renderCafesTable() {
           </a>
         </div>
       </td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-        <button
-          class="btn-delete-cafe text-red-600 hover:text-red-900"
-          data-id="${cafe.id}"
-        >
-          삭제
-        </button>
+      <td class="action-cell px-6 py-4 whitespace-nowrap text-sm font-medium sticky right-0 bg-white group-hover:bg-gray-50" data-id="${cafe.id}">
+        <div class="relative flex justify-center">
+          <button class="btn-action-menu p-2 hover:bg-gray-200 rounded-lg" data-id="${cafe.id}">
+            <span class="text-gray-500 text-lg">⋯</span>
+          </button>
+          <div class="action-dropdown hidden absolute right-0 top-full mt-1 w-24 bg-white rounded-lg shadow-lg border" data-id="${cafe.id}">
+            <button class="btn-delete-cafe w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg" data-id="${cafe.id}">
+              삭제
+            </button>
+          </div>
+        </div>
       </td>
     </tr>
-  `).join('')
+  `}).join('')
 
   // 활성/비활성 체크박스 이벤트
   document.querySelectorAll('.cafe-active-checkbox').forEach(checkbox => {
@@ -157,10 +167,43 @@ async function renderCafesTable() {
     })
   })
 
+  // 드롭다운 메뉴 토글 이벤트
+  document.querySelectorAll('.btn-action-menu').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const id = btn.dataset.id
+      const dropdown = document.querySelector(`.action-dropdown[data-id="${id}"]`)
+      const cell = document.querySelector(`.action-cell[data-id="${id}"]`)
+
+      // 다른 드롭다운 모두 닫기 및 z-index 초기화
+      document.querySelectorAll('.action-dropdown').forEach(d => {
+        if (d !== dropdown) d.classList.add('hidden')
+      })
+      document.querySelectorAll('.action-cell').forEach(c => {
+        if (c !== cell) c.style.zIndex = ''
+      })
+
+      // 현재 드롭다운 토글 및 z-index 설정
+      const isOpening = dropdown?.classList.toggle('hidden') === false
+      if (cell) cell.style.zIndex = isOpening ? '50' : ''
+    })
+  })
+
+  // 외부 클릭 시 드롭다운 닫기
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.action-dropdown').forEach(d => d.classList.add('hidden'))
+    document.querySelectorAll('.action-cell').forEach(c => c.style.zIndex = '')
+  })
+
   // 삭제 버튼 이벤트
   document.querySelectorAll('.btn-delete-cafe').forEach(btn => {
     btn.addEventListener('click', async (e) => {
+      e.stopPropagation()
       const id = parseInt(e.target.dataset.id)
+
+      // 드롭다운 닫기
+      document.querySelectorAll('.action-dropdown').forEach(d => d.classList.add('hidden'))
+
       if (confirm('정말 이 카페를 삭제하시겠습니까?')) {
         try {
           await window.api.cafes.delete(id)
@@ -203,6 +246,12 @@ function closeModal() {
   const modal = document.getElementById('cafe-modal')
   modal?.classList.add('hidden')
   document.getElementById('cafe-form')?.reset()
+
+  // 힌트 초기화
+  const hintEl = document.getElementById('cafe-url-hint')
+  const inputEl = document.getElementById('input-cafe-url')
+  if (hintEl) hintEl.textContent = '전체 URL을 입력하세요 (카페 유형 자동 감지)'
+  if (inputEl) inputEl.placeholder = 'https://cafe.naver.com/카페명'
 }
 
 /**
@@ -214,6 +263,11 @@ export function attachCafeManagerEvents() {
 
   // 모달 취소 버튼
   document.getElementById('btn-cancel-modal')?.addEventListener('click', closeModal)
+
+  // URL 입력 시 카페 유형 실시간 감지
+  document.getElementById('input-cafe-url')?.addEventListener('input', (e) => {
+    updateCafeUrlHint(e.target.value)
+  })
 
   // 카페 폼 제출
   document.getElementById('cafe-form')?.addEventListener('submit', async (e) => {
@@ -249,4 +303,53 @@ function escapeHtml(text) {
 
 function showToast(message) {
   alert(message)
+}
+
+/**
+ * 카페 유형에 따른 배지 HTML 반환
+ * @param {string} type - 카페 유형 ('naver' 또는 'daum')
+ * @returns {string} 배지 HTML
+ */
+function getCafeTypeBadge(type) {
+  if (type === 'daum') {
+    return '<span class="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">다음</span>'
+  }
+  // 기본값: 네이버
+  return '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">네이버</span>'
+}
+
+/**
+ * URL에서 카페 유형 감지
+ * @param {string} url - 카페 URL
+ * @returns {string} 카페 유형 ('naver' 또는 'daum')
+ */
+function detectCafeType(url) {
+  if (!url) return 'naver'
+  const lowerUrl = url.toLowerCase()
+  if (lowerUrl.includes('cafe.daum.net')) return 'daum'
+  return 'naver'
+}
+
+/**
+ * URL 입력에 따라 힌트 텍스트 업데이트
+ * @param {string} url - 입력된 URL
+ */
+function updateCafeUrlHint(url) {
+  const hintEl = document.getElementById('cafe-url-hint')
+  const inputEl = document.getElementById('input-cafe-url')
+  if (!hintEl || !inputEl) return
+
+  const cafeType = detectCafeType(url)
+
+  if (cafeType === 'daum') {
+    hintEl.innerHTML = '<span class="text-yellow-600 font-medium">다음 카페</span> 감지됨 - 형식: https://cafe.daum.net/{카페ID}/{게시판ID}'
+    inputEl.placeholder = 'https://cafe.daum.net/카페ID/게시판ID'
+  } else {
+    if (url && url.includes('cafe.naver.com')) {
+      hintEl.innerHTML = '<span class="text-green-600 font-medium">네이버 카페</span> 감지됨'
+    } else {
+      hintEl.textContent = '전체 URL을 입력하세요 (카페 유형 자동 감지)'
+    }
+    inputEl.placeholder = 'https://cafe.naver.com/카페명'
+  }
 }

@@ -57,9 +57,6 @@ export function createTemplateManager() {
                 placeholder="쪽지 내용을 입력하세요..."
                 required
               ></textarea>
-              <p class="text-xs text-gray-500 mt-1">
-                팁: {name}, {date} 등의 변수를 사용할 수 있습니다 (추후 구현 예정)
-              </p>
             </div>
             <div class="flex space-x-3">
               <button
